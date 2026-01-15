@@ -3,6 +3,34 @@ export interface StatEntry {
   count: number
   lastEntry: string
   frequency: string
+  rawDates?: Date[]
+}
+
+export function calculateMetadata(dates: Date[], referenceDate: Date): { lastEntry: string, frequency: string } {
+  if (dates.length === 0) {
+    return { lastEntry: "N/A", frequency: "N/A" }
+  }
+
+  dates.sort((a, b) => a.getTime() - b.getTime())
+  const lastEntry = formatRelativeTime(dates[dates.length - 1], referenceDate)
+
+  let frequency = "N/A"
+  if (dates.length > 1) {
+    const firstDate = dates[0]
+    const lastDate = dates[dates.length - 1]
+    const totalDays = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)
+    if (totalDays > 0) {
+      const avgDays = totalDays / (dates.length - 1)
+      if (avgDays < 1) {
+        const hours = Math.round(avgDays * 24)
+        frequency = hours === 1 ? "1 hour" : `${hours} hours`
+      } else {
+        const days = Math.round(avgDays)
+        frequency = days === 1 ? "1 day" : `${days} days`
+      }
+    }
+  }
+  return { lastEntry, frequency }
 }
 
 export interface WeeklyDataPoint {
@@ -115,32 +143,9 @@ export function calculateStats(entries: Array<{ value: string; date: Date }>): S
   for (const [name, data] of statsMap) {
     const { count, dates } = data
 
-    if (dates.length === 0) {
-      results.push({ name, count, lastEntry: "N/A", frequency: "N/A" })
-      continue
-    }
+    const metadata = calculateMetadata(dates, maxDate)
 
-    dates.sort((a, b) => a.getTime() - b.getTime())
-    const lastEntry = formatRelativeTime(dates[dates.length - 1], maxDate)
-
-    let frequency = "N/A"
-    if (dates.length > 1) {
-      const firstDate = dates[0]
-      const lastDate = dates[dates.length - 1]
-      const totalDays = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)
-      if (totalDays > 0) {
-        const avgDays = totalDays / (count - 1)
-        if (avgDays < 1) {
-          const hours = Math.round(avgDays * 24)
-          frequency = hours === 1 ? "1 hour" : `${hours} hours`
-        } else {
-          const days = Math.round(avgDays)
-          frequency = days === 1 ? "1 day" : `${days} days`
-        }
-      }
-    }
-
-    results.push({ name, count, lastEntry, frequency })
+    results.push({ name, count, lastEntry: metadata.lastEntry, frequency: metadata.frequency, rawDates: dates })
   }
 
   return results.sort((a, b) => b.count - a.count)
@@ -303,7 +308,8 @@ export async function parseTaxonomyCSV(): Promise<TaxonomyTree> {
 export function buildHierarchicalStats(
   flatStats: StatEntry[],
   taxonomy: TaxonomyTree,
-  taxonomyType: 'category' | 'geo'
+  taxonomyType: 'category' | 'geo',
+  referenceDate: Date = new Date()
 ): HierarchicalStatEntry[] {
   // Create a map of name -> stat
   const statsMap = new Map<string, StatEntry>()
@@ -312,20 +318,21 @@ export function buildHierarchicalStats(
   }
 
   // Recursively aggregate counts for a node and its descendants
-  function aggregateCount(nodeId: string): number {
+  // Recursively aggregate dates for a node and its descendants
+  function collectDates(nodeId: string): Date[] {
     const node = taxonomy.nodes.get(nodeId)
-    if (!node) return 0
+    if (!node) return []
 
-    // Start with the direct count for this category
+    // Start with the direct dates for this category
     const directStat = statsMap.get(node.name)
-    let total = directStat ? directStat.count : 0
+    let dates = directStat?.rawDates ? [...directStat.rawDates] : []
 
-    // Add counts from all children recursively
+    // Add dates from all children recursively
     for (const childId of node.children) {
-      total += aggregateCount(childId)
+      dates = dates.concat(collectDates(childId))
     }
 
-    return total
+    return dates
   }
 
   // Build hierarchical stats for root categories only (initially)
@@ -335,16 +342,17 @@ export function buildHierarchicalStats(
     const node = taxonomy.nodes.get(rootId)
     if (!node || node.taxonomy !== taxonomyType) continue
 
-    const directStat = statsMap.get(node.name)
-    const aggregatedCount = aggregateCount(rootId)
+    const allDates = collectDates(rootId)
+    const metadata = calculateMetadata(allDates, referenceDate)
+    const aggregatedCount = allDates.length
 
     // Only include categories that have entries (direct or through children)
     if (aggregatedCount > 0) {
       hierarchicalStats.push({
         name: node.name,
         count: aggregatedCount,
-        lastEntry: directStat?.lastEntry || 'N/A',
-        frequency: directStat?.frequency || 'N/A',
+        lastEntry: metadata.lastEntry,
+        frequency: metadata.frequency,
         id: rootId,
         depth: node.depth,
         hasChildren: node.children.length > 0,
@@ -362,7 +370,8 @@ export function buildHierarchicalStats(
 export function getChildStats(
   parentId: string,
   flatStats: StatEntry[],
-  taxonomy: TaxonomyTree
+  taxonomy: TaxonomyTree,
+  referenceDate: Date = new Date()
 ): HierarchicalStatEntry[] {
   const parentNode = taxonomy.nodes.get(parentId)
   if (!parentNode) return []
@@ -373,18 +382,19 @@ export function getChildStats(
   }
 
   // Recursively aggregate counts for a node and its descendants
-  function aggregateCount(nodeId: string): number {
+  // Recursively aggregate dates for a node and its descendants
+  function collectDates(nodeId: string): Date[] {
     const node = taxonomy.nodes.get(nodeId)
-    if (!node) return 0
+    if (!node) return []
 
     const directStat = statsMap.get(node.name)
-    let total = directStat ? directStat.count : 0
+    let dates = directStat?.rawDates ? [...directStat.rawDates] : []
 
     for (const childId of node.children) {
-      total += aggregateCount(childId)
+      dates = dates.concat(collectDates(childId))
     }
 
-    return total
+    return dates
   }
 
   const childStats: HierarchicalStatEntry[] = []
@@ -393,15 +403,16 @@ export function getChildStats(
     const node = taxonomy.nodes.get(childId)
     if (!node) continue
 
-    const directStat = statsMap.get(node.name)
-    const aggregatedCount = aggregateCount(childId)
+    const dates = collectDates(childId)
+    const metadata = calculateMetadata(dates, referenceDate)
+    const aggregatedCount = dates.length
 
     if (aggregatedCount > 0) {
       childStats.push({
         name: node.name,
         count: aggregatedCount,
-        lastEntry: directStat?.lastEntry || 'N/A',
-        frequency: directStat?.frequency || 'N/A',
+        lastEntry: metadata.lastEntry,
+        frequency: metadata.frequency,
         id: childId,
         depth: node.depth,
         hasChildren: node.children.length > 0,

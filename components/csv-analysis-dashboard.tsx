@@ -291,7 +291,8 @@ function flattenHierarchy(
   nodes: HierarchicalStatEntry[],
   expandedIds: Set<string>,
   flatStats: StatEntry[],
-  taxonomy: TaxonomyTree
+  taxonomy: TaxonomyTree,
+  referenceDate: Date
 ): HierarchicalStatEntry[] {
   let result: HierarchicalStatEntry[] = []
 
@@ -299,8 +300,8 @@ function flattenHierarchy(
     result.push(node)
 
     if (expandedIds.has(node.id)) {
-      const children = getChildStats(node.id, flatStats, taxonomy)
-      const flattenedChildren = flattenHierarchy(children, expandedIds, flatStats, taxonomy)
+      const children = getChildStats(node.id, flatStats, taxonomy, referenceDate)
+      const flattenedChildren = flattenHierarchy(children, expandedIds, flatStats, taxonomy, referenceDate)
       result = result.concat(flattenedChildren)
     }
   }
@@ -422,6 +423,15 @@ export function CsvAnalysisDashboard() {
     rawCats = filterEntries(rawCats)
     rawGeos = filterEntries(rawGeos)
     rawTemplates = filterEntries(rawTemplates)
+    // Calculate dynamic range for the current view
+    const allFilteredDates = [
+      ...rawCats.map((e: any) => e.date),
+      ...rawGeos.map((e: any) => e.date),
+      ...rawTemplates.map((e: any) => e.date)
+    ].sort((a, b) => a.getTime() - b.getTime())
+
+    let viewMin = cutoffDate.getTime() === 0 ? (allFilteredDates[0] || new Date()) : cutoffDate
+    let viewMax = allFilteredDates[allFilteredDates.length - 1] || new Date()
 
     const statsCats = calculateStats(rawCats)
     const statsGeos = calculateStats(rawGeos)
@@ -431,11 +441,11 @@ export function CsvAnalysisDashboard() {
     let finalGeos: StatEntry[] = statsGeos
 
     if (taxonomy) {
-      const rootCats = buildHierarchicalStats(statsCats, taxonomy, 'category')
-      finalCats = flattenHierarchy(rootCats, expandedCategories, statsCats, taxonomy)
+      const rootCats = buildHierarchicalStats(statsCats, taxonomy, 'category', viewMax)
+      finalCats = flattenHierarchy(rootCats, expandedCategories, statsCats, taxonomy, viewMax)
 
-      const rootGeos = buildHierarchicalStats(statsGeos, taxonomy, 'geo')
-      finalGeos = flattenHierarchy(rootGeos, expandedGeos, statsGeos, taxonomy)
+      const rootGeos = buildHierarchicalStats(statsGeos, taxonomy, 'geo', viewMax)
+      finalGeos = flattenHierarchy(rootGeos, expandedGeos, statsGeos, taxonomy, viewMax)
     }
 
     let timelineCats = getTimelineDistribution(rawCats)
@@ -446,16 +456,6 @@ export function CsvAnalysisDashboard() {
       timelineCats = aggregateTimelineData(timelineCats, taxonomy, 'category')
       timelineGeos = aggregateTimelineData(timelineGeos, taxonomy, 'geo')
     }
-
-    // Calculate dynamic range for the current view
-    const allFilteredDates = [
-      ...rawCats.map((e: any) => e.date),
-      ...rawGeos.map((e: any) => e.date),
-      ...rawTemplates.map((e: any) => e.date)
-    ].sort((a, b) => a.getTime() - b.getTime())
-
-    let viewMin = cutoffDate.getTime() === 0 ? (allFilteredDates[0] || new Date()) : cutoffDate
-    let viewMax = allFilteredDates[allFilteredDates.length - 1] || new Date()
 
     // If we used a limit, verify the exact min date from the filtered set
     if (limitCount > 0 && allFilteredDates.length > 0) {
