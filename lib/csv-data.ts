@@ -43,6 +43,14 @@ export interface GroupWeeklyData {
   data: WeeklyDataPoint[]
 }
 
+export interface Article {
+  title: string
+  date: Date
+  template: string
+  category?: string
+  geo?: string
+}
+
 export interface TaxonomyNode {
   id: string
   name: string
@@ -92,7 +100,7 @@ function cleanTemplateName(template: string): string {
   return clean
 }
 
-function formatRelativeTime(date: Date, referenceDate: Date = new Date()): string {
+export function formatRelativeTime(date: Date, referenceDate: Date = new Date()): string {
   const diffMs = referenceDate.getTime() - date.getTime()
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -443,11 +451,13 @@ export function processCSVData(csvString: string): {
     geos: Array<{ value: string; date: Date; title: string }>
     templates: Array<{ value: string; date: Date; title: string }>
   }
+  articles: Article[]
 } {
   const lines = csvString.trim().split("\n")
   const categoryEntries: Array<{ value: string; date: Date; title: string }> = []
   const geoEntries: Array<{ value: string; date: Date; title: string }> = []
   const templateEntries: Array<{ value: string; date: Date; title: string }> = []
+  const articles: Article[] = []
 
   // Skip header, parse each line
   for (let i = 1; i < lines.length; i++) {
@@ -474,6 +484,15 @@ export function processCSVData(csvString: string): {
     if (template) {
       const cleanTemplate = cleanTemplateName(template)
       templateEntries.push({ value: cleanTemplate, date, title })
+
+      const article: Article = {
+        title,
+        date,
+        template: cleanTemplate,
+        category: (category && category !== "NULL") ? category.trim() : undefined,
+        geo: (geo && geo !== "NULL") ? geo : undefined
+      }
+      articles.push(article)
     }
   }
 
@@ -500,7 +519,8 @@ export function processCSVData(csvString: string): {
       categories: categoryEntries,
       geos: geoEntries,
       templates: templateEntries
-    }
+    },
+    articles
   }
 }
 

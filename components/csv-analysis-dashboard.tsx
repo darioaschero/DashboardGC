@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { processCSVData, calculateStats, getTimelineDistribution, parseTaxonomyCSV, buildHierarchicalStats, getChildStats, aggregateTimelineData, type StatEntry, type TimelineEntry, type TaxonomyTree, type HierarchicalStatEntry } from "@/lib/csv-data"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RecentArticlesPanel } from "@/components/recent-articles-panel"
 
 function TimelineChart({
   timelineData,
@@ -338,13 +339,13 @@ export function CsvAnalysisDashboard() {
   }, [])
 
   const {
-    filteredCategories, filteredGeos, filteredTemplates,
+    filteredCategories, filteredGeos, filteredTemplates, filteredArticles,
     totalArticles,
     categoryTimeline, geoTimeline, templateTimeline,
     minDate, maxDate, lastArticleDate
   } = useMemo(() => {
     if (!data) return {
-      filteredCategories: [], filteredGeos: [], filteredTemplates: [],
+      filteredCategories: [], filteredGeos: [], filteredTemplates: [], filteredArticles: [],
       totalArticles: 0,
       categoryTimeline: new Map(), geoTimeline: new Map(), templateTimeline: new Map(),
       minDate: new Date(), maxDate: new Date(), lastArticleDate: null
@@ -423,6 +424,8 @@ export function CsvAnalysisDashboard() {
     rawCats = filterEntries(rawCats)
     rawGeos = filterEntries(rawGeos)
     rawTemplates = filterEntries(rawTemplates)
+    let rawArticles = data.articles || []
+    rawArticles = filterEntries(rawArticles)
     // Calculate dynamic range for the current view
     const allFilteredDates = [
       ...rawCats.map((e: any) => e.date),
@@ -477,6 +480,7 @@ export function CsvAnalysisDashboard() {
       filteredCategories: finalCats,
       filteredGeos: finalGeos,
       filteredTemplates: statsTemplates,
+      filteredArticles: rawArticles,
       totalArticles: new Set([...rawCats, ...rawGeos, ...rawTemplates].map(e => e.title)).size,
       categoryTimeline: timelineCats,
       geoTimeline: timelineGeos,
@@ -599,6 +603,8 @@ export function CsvAnalysisDashboard() {
           }
         />
       </div>
+
+      <RecentArticlesPanel articles={filteredArticles} referenceDate={lastArticleDate || new Date()} />
     </div>
   )
 }
