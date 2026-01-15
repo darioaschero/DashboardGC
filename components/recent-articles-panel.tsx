@@ -50,34 +50,34 @@ export function RecentArticlesPanel({ articles, referenceDate }: RecentArticlesP
                     {displayArticles.map((article, i) => (
                         <div
                             key={i}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                            className="flex flex-col gap-2 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                         >
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Clock className="w-3 h-3" />
-                                    <span>{formatRelativeTime(article.date, referenceDate)}</span>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                    {formatRelativeTime(article.date, referenceDate)}
+                                </span>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                        <FileText className="w-3 h-3" />
+                                        {article.template}
+                                    </Badge>
+                                    {article.category && (
+                                        <Badge variant="secondary" className="flex items-center gap-1">
+                                            <Tag className="w-3 h-3" />
+                                            {article.category}
+                                        </Badge>
+                                    )}
+                                    {article.geo && (
+                                        <Badge variant="secondary" className="flex items-center gap-1">
+                                            <Globe className="w-3 h-3" />
+                                            {article.geo}
+                                        </Badge>
+                                    )}
                                 </div>
-                                <h3 className="font-medium leading-none">{article.title}</h3>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                <Badge variant="outline" className="flex items-center gap-1">
-                                    <FileText className="w-3 h-3" />
-                                    {article.template}
-                                </Badge>
-                                {article.category && (
-                                    <Badge variant="secondary" className="flex items-center gap-1">
-                                        <Tag className="w-3 h-3" />
-                                        {article.category}
-                                    </Badge>
-                                )}
-                                {article.geo && (
-                                    <Badge variant="secondary" className="flex items-center gap-1">
-                                        <Globe className="w-3 h-3" />
-                                        {article.geo}
-                                    </Badge>
-                                )}
-                            </div>
+                            <h3 className="font-medium leading-tight">{article.title}</h3>
                         </div>
                     ))}
 
